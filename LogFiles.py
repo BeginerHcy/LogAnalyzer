@@ -42,99 +42,131 @@ class LogAnalyzer:
                         self.send_sequences.append(current_send_sequence)
                     current_send_sequence = [parsed]
                     continue
+                    
                 # 处理接收数据的通信序列
                 if parsed['direction'] == 'Rcv' and parsed['data'] == '05':
                     if current_receive_sequence:
                         self.receive_sequences.append(current_receive_sequence)
                     current_receive_sequence = [parsed]
                     continue
-                # 更新发送序列
+                    # 更新发送序列
                 if current_send_sequence:
                     current_send_sequence.append(parsed)
                     if parsed['direction'] == 'Rcv' and parsed['data'] == '06':
                         self.send_sequences.append(current_send_sequence)
                         current_send_sequence = []
+                
                 # 更新接收序列
                 if current_receive_sequence:
                     current_receive_sequence.append(parsed)
                     if parsed['direction'] == 'Snd' and parsed['data'] == '06':
                         self.receive_sequences.append(current_receive_sequence)
                         current_receive_sequence = []
-    # ... 保持 parse_log_line 和 analyze_log 方法不变 ...
     def sequence_to_excel_row(self, sequence, seq_type, idx):
-        if len(sequence) >= 4:
+        if len(sequence) >= 4:  # 确保至少包含完整的通信过程
             start_time = sequence[0]['timestamp']
             end_time = sequence[-1]['timestamp']
             duration = (end_time - start_time).total_seconds() * 1000
             
-            main_data = None
+            # 提取主体报文
+            main_data = []
+            found_04 = False
+            for msg in sequence:
+                if found_04 and msg['data'] != '06':  # 在找到04之后，06之前的都是主体报文
+                    main_data.append(msg['data'])
+                if msg['data'] == '04':
+                    found_04 = True
+                elif msg['data'] == '06':
+                    break
+            
+            # 构建完整的通信过程字符串
             sequence_str = []
             for msg in sequence:
                 sequence_str.append(f"{msg['timestamp'].strftime('%H:%M:%S.%f')[:-3]} "
                                     f"{msg['direction']}: {msg['data']}")
-                
-                if ((seq_type == "发送" and msg['direction'] == 'Snd') or 
-                    (seq_type == "接收" and msg['direction'] == 'Rcv')) and \
-                    msg['data'] not in ['05', '04', '06']:
-                    main_data = msg['data']
             
             return {
                 '序列号': idx,
                 '开始时间': start_time,
                 '结束时间': end_time,
                 '持续时间(ms)': round(duration, 2),
-                '主报文': main_data if main_data else '',
+                '主报文': ' '.join(main_data) if main_data else '',
                 '完整通信过程': '\n'.join(sequence_str)
-                }
+            }
         return None
     def generate_excel_report(self):
-        # 准备Excel数据
+        # 准备所有序列的数据
+        all_sequences = []
+        
+        # 处理发送序列
         for idx, sequence in enumerate(self.send_sequences, 1):
             row_data = self.sequence_to_excel_row(sequence, "发送", idx)
             if row_data:
-                self.excel_data['send'].append(row_data)
+                row_data['类型'] = '发送'  # 添加类型标识
+                all_sequences.append(row_data)
         
+        # 处理接收序列
         for idx, sequence in enumerate(self.receive_sequences, 1):
             row_data = self.sequence_to_excel_row(sequence, "接收", idx)
             if row_data:
-                self.excel_data['receive'].append(row_data)
-            # 创建Excel文件
+                row_data['类型'] = '接收'  # 添加类型标识
+                all_sequences.append(row_data)
+        
+        # 按开始时间排序
+        all_sequences.sort(key=lambda x: x['开始时间'])
+        
+        # 重新编号
+        for idx, sequence in enumerate(all_sequences, 1):
+            sequence['序列号'] = idx
+        
+        # 创建输出目录
         output_dir = 'analysis_results'
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-            # 生成文件名（使用当前时间）
+        
+        # 生成文件名
         current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
         excel_path = f'{output_dir}/log_analysis_{current_time}.xlsx'
-            # 创建Excel写入器
+        
+        # 创建Excel写入器
         with pd.ExcelWriter(excel_path, engine='xlsxwriter') as writer:
-            # 发送数据表
-            if self.excel_data['send']:
-                df_send = pd.DataFrame(self.excel_data['send'])
-                df_send.to_excel(writer, sheet_name='发送数据序列', index=False)
-                
+            # 所有数据序列表
+            if all_sequences:
+                df_all = pd.DataFrame(all_sequences)
+                # 重新排列列顺序，将'类型'列放在序列号后面
+                columns = ['序列号', '类型', '开始时间', '结束时间', '持续时间(ms)', '主报文', '完整通信过程']
+                df_all = df_all[columns]
+                df_all.to_excel(writer, sheet_name='通信序列', index=False)
                 # 调整列宽
-                worksheet = writer.sheets['发送数据序列']
-                worksheet.set_column('A:A', 8)  # 序列号
-                worksheet.set_column('B:C', 20)  # 时间列
-                worksheet.set_column('D:D', 12)  # 持续时间
-                worksheet.set_column('E:E', 30)  # 主报文
-                worksheet.set_column('F:F', 50)  # 完整通信过程
-                # 接收数据表
-            if self.excel_data['receive']:
-                df_receive = pd.DataFrame(self.excel_data['receive'])
-                df_receive.to_excel(writer, sheet_name='接收数据序列', index=False)
-                
-                # 调整列宽
-                worksheet = writer.sheets['接收数据序列']
-                worksheet.set_column('A:A', 8)
-                worksheet.set_column('B:C', 20)
-                worksheet.set_column('D:D', 12)
-                worksheet.set_column('E:E', 30)
-                worksheet.set_column('F:F', 50)
+                worksheet = writer.sheets['通信序列']
+                worksheet.set_column('A:A', 8)   # 序列号
+                worksheet.set_column('B:B', 8)   # 类型
+                worksheet.set_column('C:D', 20)  # 时间列
+                worksheet.set_column('E:E', 12)  # 持续时间
+                worksheet.set_column('F:F', 30)  # 主报文
+                worksheet.set_column('G:G', 50)  # 完整通信过程
+                # 添加条件格式，为不同类型设置不同的背景色
+                format_send = writer.book.add_format({'bg_color': '#E6F3FF'})  # 淡蓝色
+                format_receive = writer.book.add_format({'bg_color': '#F3FFE6'})  # 淡绿色
+                # 应用条件格式
+                worksheet.conditional_format('A2:G1048576', {
+                    'type': 'formula',
+                    'criteria': '=$B2="发送"',
+                    'format': format_send
+                })
+                worksheet.conditional_format('A2:G1048576', {
+                    'type': 'formula',
+                    'criteria': '=$B2="接收"',
+                    'format': format_receive
+                })
                 # 添加统计信息表
-            stats_data = {
-                '统计项': ['发送序列总数', '接收序列总数'],
-                '数量': [len(self.send_sequences), len(self.receive_sequences)]
+                stats_data = {
+                '统计项': ['发送序列总数', '接收序列总数', '总序列数'],
+                '数量': [
+                    len(self.send_sequences), 
+                    len(self.receive_sequences),
+                    len(self.send_sequences) + len(self.receive_sequences)
+                    ]
             }
             df_stats = pd.DataFrame(stats_data)
             df_stats.to_excel(writer, sheet_name='统计信息', index=False)
