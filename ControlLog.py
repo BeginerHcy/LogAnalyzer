@@ -7,38 +7,34 @@ from openpyxl.utils import get_column_letter
 
 rootpath = 'F:/01_ProjectsFiles/01_Programs/LogFilse/'  
 
-motiondict = {}
-motiondict['528'] = 'ADIT_UCS'
-motiondict['258'] = 'SET_DO'
-motiondict['514'] = 'HOME_GRP'
-motiondict['515'] = 'STOP_GRP'
-motiondict['517'] = 'HALT'
-motiondict['518'] = 'CONTINUE'
-motiondict['519'] = 'ACK_GRP'
-
-motiondict['769'] = 'PUT_RDY_APP'
-motiondict['770'] = 'GET_RDY_APP'
-motiondict['771'] = 'TRG_RDY_APP'
-motiondict['772'] = 'EXTA_APP'
-motiondict['773'] = 'RETA_APP'
-motiondict['774'] = 'SAFE_R_APP'
-motiondict['775'] = 'SAFE_CST_APP'
-motiondict['776'] = 'TEACH_APP'
-motiondict['777'] = 'MPRDY_APP'
-motiondict['778'] = 'MPMOYION_APP'
-
-motiondict['780'] = 'ZPRDY_APP'
-motiondict['779'] = 'ZGRDY_APP'
-motiondict['781'] = 'RSWAP_APP'
-motiondict['782'] = 'NRDY_APP'
-motiondict['783'] = 'ROTATE_APP'
-
-motiondict['1025'] = 'PAR_UPDATE'
-motiondict['1026'] = 'CST_UPDATE'
-motiondict['1027'] = 'ADD_MONITOR'
-motiondict['1028'] = 'DEL_MONITOR'
-
-
+motion_dict = {
+    '528': 'ADIT_UCS',
+    '258': 'SET_DO',
+    '514': 'HOME_GRP',
+    '515': 'STOP_GRP',
+    '517': 'HALT',
+    '518': 'CONTINUE',
+    '519': 'ACK_GRP',
+    '769': 'PUT_RDY_APP',
+    '770': 'GET_RDY_APP',
+    '771': 'TRG_RDY_APP',
+    '772': 'EXTA_APP',
+    '773': 'RETA_APP',
+    '774': 'SAFE_R_APP',
+    '775': 'SAFE_CST_APP',
+    '776': 'TEACH_APP',
+    '777': 'MPRDY_APP',
+    '778': 'MPMOYION_APP',
+    '780': 'ZPRDY_APP',
+    '779': 'ZGRDY_APP',
+    '781': 'RSWAP_APP',
+    '782': 'NRDY_APP',
+    '783': 'ROTATE_APP',
+    '1025': 'PAR_UPDATE',
+    '1026': 'CST_UPDATE',
+    '1027': 'ADD_MONITOR',
+    '1028': 'DEL_MONITOR'
+}
 
 def parse_log_line(line: str) -> Dict[str, Any]:
     """解析单行日志"""
@@ -123,7 +119,7 @@ def create_excel_report(actions: List[Dict[str, Any]], output_file: str):
     timeline_data = [{
         '开始时间': action['start_time'].strftime('%H:%M:%S.%f'),
         '结束时间': action['end_time'].strftime('%H:%M:%S.%f'),
-        '指令ID': motiondict[action['cmd_id']],
+        '指令ID': motion_dict[action['cmd_id']],
         '耗时(秒)': round(action['duration'], 3)
     } for action in actions]
     
