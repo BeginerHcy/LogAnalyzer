@@ -122,8 +122,6 @@ class LogAnalyzer:
                     completed_action = bytes_data[2]
                     if completed_action == 0x21:
                         return "Macro Finish"
-                    elif completed_action == 0x01:
-                        return "状态已获取"
                     elif completed_action == 0x08:
                         return "速度已设定"
                     elif completed_action == 0x06:
@@ -132,9 +130,10 @@ class LogAnalyzer:
             # 4. 失败
             elif action_byte == 0x63:
                 if len(bytes_data) >= 4:
+                    error_action = bytes_data[2]
                     error_type = bytes_data[3]
                     error_code = bytes_data[4]
-                    return f"失败 类型:0x{error_type:02x}, 代码:0x{error_code:02x}"
+                    return f"执行0x{error_action:02x}失败 类型:0x{error_type:02x}, 代码:0x{error_code:02x}"
             # 5. IO事件触发
             elif action_byte == 0x70:
                 if len(bytes_data) >= 3:
@@ -146,6 +145,8 @@ class LogAnalyzer:
                 if len(bytes_data) >= 3:
                     mode = bytes_data[2]
                     return f"模式切换到:0x{mode:02x}"
+            elif action_byte == 0x61:
+                return '状态已获取'
             # 7. 未知消息
             else:
                 return f"其他消息 0x{action_byte:02x}"
