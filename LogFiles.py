@@ -4,11 +4,7 @@ from collections import defaultdict
 import pandas as pd
 import os
 
-rootpath = 'D:/00_PROJECT/04_Python/LogAnalyzer/'
-
-def inser_char(s,char,index,len):
-    return s[:index] + char[0:len] + s[index:]
-    
+rootpath = 'F:/01_ProjectsFiles/01_Programs/LogFilse/'
 class LogAnalyzer:
     def __init__(self, log_file_path):
         self.log_file_path = log_file_path
@@ -22,12 +18,18 @@ class LogAnalyzer:
     def parse_log_line(self, line):
         pattern = r'Debug:\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.(\d{3}|\d{1}|\d{2})):\s+(Snd|Rcv):\s+(.+)'
         match = re.match(pattern, line)
-        #print(match.group(1))
+        
         if match:
-            fslen = len(match.group(1).split('.')[-1])
-            newgroup1 = (inser_char(match.group(1),'000',-fslen, 3-fslen))
-            timestamp = datetime.strptime(newgroup1, '%Y-%m-%d %H:%M:%S.%f')
-            #print(timestamp)
+            # 获取毫秒部分并确保它是3位数
+            timestamp_str = match.group(1)
+            time_parts = timestamp_str.split('.')
+            ms_part = time_parts[1].zfill(3) if len(time_parts) > 1 else '000'
+            
+            # 重构时间戳字符串
+            time_without_date = timestamp_str.split(' ')[1].split('.')[0]
+            full_time_str = f"{time_without_date}.{ms_part}"
+            
+            timestamp = datetime.strptime(full_time_str, '%H:%M:%S.%f').time()
             direction = match.group(3)
             data = match.group(4).strip()
             return {
@@ -73,18 +75,97 @@ class LogAnalyzer:
                     if parsed['direction'] == 'Snd' and parsed['data'] == '06':
                         self.receive_sequences.append(current_receive_sequence)
                         current_receive_sequence = []
+    def parse_main_data(self, data_str):
+        """解析主报文内容"""
+        try:
+            # 将十六进制字符串转换为字节列表
+            bytes_data = [int(x, 16) for x in data_str.split()]
+            if len(bytes_data) < 2:  # 确保至少有两个字节
+                return "数据不完整"
+            action_byte = bytes_data[1]  # 第二个字节是动作类型
+            # 1. 读取状态
+            if action_byte == 0x01:
+                return "读取状态"
+            elif action_byte == 0x08:
+                speed = bytes_data[2]
+                return f'设置速度:{speed}'
+            elif action_byte == 0x06:
+                return '清除错误'
+            elif action_byte == 0x22:
+                return '整机复位'
+            # 2. 执行Macro动作
+            elif action_byte == 0x21:
+                if len(bytes_data) >= 3:
+                    sub_action = bytes_data[2] if len(bytes_data) > 2 else None
+                    if sub_action == 0x04:  # 取片子动作
+                        if len(bytes_data) >= 6:
+                            station = bytes_data[4]
+                            layer = bytes_data[5]
+                            arm = bytes_data[6]
+                            return f"取片 站点{station} 层数{layer} 手臂{arm}"
+                    elif sub_action == 0x05:  # 放片子动作
+                        if len(bytes_data) >= 6:
+                            station = bytes_data[4]
+                            layer = bytes_data[5]
+                            arm = bytes_data[6]
+                            return f"放片 站点{station} 层数{layer} 手臂{arm}"
+                    elif sub_action == 0x0c:  # 准备子动作
+                        if len(bytes_data) >= 6:
+                            station = bytes_data[4]
+                            layer = bytes_data[5]
+                            arm = bytes_data[6]
+                            return f"准备 站点{station} 层数{layer} 手臂{arm} "
+                    return f"执行Macro动作{sub_action}"
+            # 3. 完成
+            elif action_byte == 0x62:
+                if len(bytes_data) >= 3:
+                    completed_action = bytes_data[2]
+                    if completed_action == 0x21:
+                        return "Macro Finish"
+                    elif completed_action == 0x01:
+                        return "状态已获取"
+                    elif completed_action == 0x08:
+                        return "速度已设定"
+                    elif completed_action == 0x06:
+                        return "错误已清除"
+                    return f"动作 0x{completed_action:02x} 已完成"
+            # 4. 失败
+            elif action_byte == 0x63:
+                if len(bytes_data) >= 4:
+                    error_type = bytes_data[3]
+                    error_code = bytes_data[4]
+                    return f"失败 类型:0x{error_type:02x}, 代码:0x{error_code:02x}"
+            # 5. IO事件触发
+            elif action_byte == 0x70:
+                if len(bytes_data) >= 3:
+                    io_event_new = bytes_data[2]
+                    io_event_old = bytes_data[3]
+                    return f"IO事件触发 新:0x{io_event_new:02x}, 旧:0x{io_event_old:02X}"
+            # 6. 模式切换事件
+            elif action_byte == 0x71:
+                if len(bytes_data) >= 3:
+                    mode = bytes_data[2]
+                    return f"模式切换到:0x{mode:02x}"
+            # 7. 未知消息
+            else:
+                return f"其他消息 0x{action_byte:02x}"
+        except Exception as e:
+            return f"解析错误: {str(e)}"
     def sequence_to_excel_row(self, sequence, seq_type, idx):
         if len(sequence) >= 4:  # 确保至少包含完整的通信过程
             start_time = sequence[0]['timestamp']
             end_time = sequence[-1]['timestamp']
-            duration = (end_time - start_time).total_seconds() * 1000
+            # 计算时间差（需要特殊处理）
+            t1 = datetime.combine(datetime.today(), start_time)
+            t2 = datetime.combine(datetime.today(), end_time)
+            duration = (t2 - t1).total_seconds() * 1000
             
             # 提取主体报文
             main_data = []
             found_04 = False
             direction04 = 'Rcv'
             for msg in sequence:
-                if found_04 and msg['data'] != '06':  # 在找到04之后，06之前的都是主体报文
+                if found_04 and msg['data'] != '06' or (msg['data'] == '06' and msg['direction'] == 'Rcv'):  # 在找到04之后，06之前的都是主体报文
                     main_data.append(msg['data'])
                 if msg['data'] == '04':
                     found_04 = True
@@ -92,45 +173,42 @@ class LogAnalyzer:
                 elif msg['data'] == '06' and msg['direction'] == direction04 :
                     break
             
+            # 解析主报文内容
+            main_data_str = ' '.join(main_data)
+            parsed_main_data = self.parse_main_data(main_data_str) if main_data else ''
+            
             # 构建完整的通信过程字符串
             sequence_str = []
             for msg in sequence:
                 sequence_str.append(f"{msg['timestamp'].strftime('%H:%M:%S.%f')[:-3]} "
                                     f"{msg['direction']}: {msg['data']}")
             return {
-                '序列号': idx,
+                #'序列号': idx,
                 '开始时间': start_time,
                 '结束时间': end_time,
                 '持续时间(ms)': round(duration, 2),
-                '主报文': ' '.join(main_data) if main_data else '',
-                '完整通信过程': '\n'.join(sequence_str)
+                '动作':parsed_main_data
+                #'主报文': ' '.join(main_data) if main_data else ''
+                #'完整通信过程': '\n'.join(sequence_str)
             }
         return None
     def generate_excel_report(self):
         # 准备所有序列的数据
         all_sequences = []
-        
         # 处理发送序列
         for idx, sequence in enumerate(self.send_sequences, 1):
             row_data = self.sequence_to_excel_row(sequence, "发送", idx)
             if row_data:
-                row_data['类型'] = '发送'  # 添加类型标识
+                #row_data['类型'] = '发送'  # 添加类型标识
                 all_sequences.append(row_data)
-        
         # 处理接收序列
         for idx, sequence in enumerate(self.receive_sequences, 1):
             row_data = self.sequence_to_excel_row(sequence, "接收", idx)
             if row_data:
-                row_data['类型'] = '接收'  # 添加类型标识
+                #row_data['类型'] = '接收'  # 添加类型标识
                 all_sequences.append(row_data)
-        
         # 按开始时间排序
         all_sequences.sort(key=lambda x: x['开始时间'])
-        
-        # 重新编号
-        for idx, sequence in enumerate(all_sequences, 1):
-            sequence['序列号'] = idx
-        
         # 创建输出目录
         output_dir = rootpath + 'analysis_results'
         if not os.path.exists(output_dir):
@@ -148,7 +226,7 @@ class LogAnalyzer:
                 df_all = pd.DataFrame(all_sequences)
                 #print(df_all)
                 # 重新排列列顺序，将'类型'列放在序列号后面
-                columns = ['序列号', '类型', '开始时间', '结束时间', '持续时间(ms)', '主报文', '完整通信过程']
+                columns = ['开始时间', '结束时间', '持续时间(ms)', '动作']
                 df_all = df_all[columns]
                 df_all.to_excel(writer, sheet_name='通信序列', index=False)
                 # 调整列宽

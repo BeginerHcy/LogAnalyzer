@@ -5,10 +5,9 @@ import pandas as pd
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 
+rootpath = 'F:/01_ProjectsFiles/01_Programs/LogFilse/'  
 
 motiondict = {}
-
-
 motiondict['528'] = 'ADIT_UCS'
 motiondict['258'] = 'SET_DO'
 motiondict['514'] = 'HOME_GRP'
@@ -192,7 +191,7 @@ def create_excel_report(actions: List[Dict[str, Any]], output_file: str):
 def main():
     try:
         # 读取日志文件
-        with open('Logctrl.txt', 'r') as file:
+        with open(rootpath + 'Logctrl.txt', 'r') as file:
             log_content = file.read()
         
         print("开始解析日志...")
@@ -200,7 +199,7 @@ def main():
         print(f"成功解析 {len(actions)} 个动作")
         
         print("\n创建Excel报告...")
-        create_excel_report(actions, '动作分析报告.xlsx')
+        create_excel_report(actions, rootpath + '动作分析报告.xlsx')
         print("Excel报告已成功生成: 动作分析报告.xlsx")
         
         # 打印预览
