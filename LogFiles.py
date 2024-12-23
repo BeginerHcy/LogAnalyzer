@@ -3,6 +3,12 @@ from datetime import datetime
 from collections import defaultdict
 import pandas as pd
 import os
+
+rootpath = 'D:/00_PROJECT/04_Python/LogAnalyzer/'
+
+def inser_char(s,char,index,len):
+    return s[:index] + char[0:len] + s[index:]
+    
 class LogAnalyzer:
     def __init__(self, log_file_path):
         self.log_file_path = log_file_path
@@ -14,12 +20,16 @@ class LogAnalyzer:
             'receive': []
         }
     def parse_log_line(self, line):
-        pattern = r'Debug:\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}):\s+(Snd|Rcv):\s+(.+)'
+        pattern = r'Debug:\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.(\d{3}|\d{1}|\d{2})):\s+(Snd|Rcv):\s+(.+)'
         match = re.match(pattern, line)
+        #print(match.group(1))
         if match:
-            timestamp = datetime.strptime(match.group(1), '%Y-%m-%d %H:%M:%S.%f')
-            direction = match.group(2)
-            data = match.group(3).strip()
+            fslen = len(match.group(1).split('.')[-1])
+            newgroup1 = (inser_char(match.group(1),'000',-fslen, 3-fslen))
+            timestamp = datetime.strptime(newgroup1, '%Y-%m-%d %H:%M:%S.%f')
+            #print(timestamp)
+            direction = match.group(3)
+            data = match.group(4).strip()
             return {
                 'timestamp': timestamp,
                 'direction': direction,
@@ -33,6 +43,7 @@ class LogAnalyzer:
             
             for line in f:
                 parsed = self.parse_log_line(line.strip())
+                #print(parsed)
                 if not parsed:
                     continue
                 
@@ -71,12 +82,14 @@ class LogAnalyzer:
             # 提取主体报文
             main_data = []
             found_04 = False
+            direction04 = 'Rcv'
             for msg in sequence:
                 if found_04 and msg['data'] != '06':  # 在找到04之后，06之前的都是主体报文
                     main_data.append(msg['data'])
                 if msg['data'] == '04':
                     found_04 = True
-                elif msg['data'] == '06':
+                    direction04 = msg['direction']
+                elif msg['data'] == '06' and msg['direction'] == direction04 :
                     break
             
             # 构建完整的通信过程字符串
@@ -84,7 +97,6 @@ class LogAnalyzer:
             for msg in sequence:
                 sequence_str.append(f"{msg['timestamp'].strftime('%H:%M:%S.%f')[:-3]} "
                                     f"{msg['direction']}: {msg['data']}")
-            
             return {
                 '序列号': idx,
                 '开始时间': start_time,
@@ -120,7 +132,7 @@ class LogAnalyzer:
             sequence['序列号'] = idx
         
         # 创建输出目录
-        output_dir = 'analysis_results'
+        output_dir = rootpath + 'analysis_results'
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         
@@ -132,7 +144,9 @@ class LogAnalyzer:
         with pd.ExcelWriter(excel_path, engine='xlsxwriter') as writer:
             # 所有数据序列表
             if all_sequences:
+                #print(all_sequences)
                 df_all = pd.DataFrame(all_sequences)
+                #print(df_all)
                 # 重新排列列顺序，将'类型'列放在序列号后面
                 columns = ['序列号', '类型', '开始时间', '结束时间', '持续时间(ms)', '主报文', '完整通信过程']
                 df_all = df_all[columns]
@@ -160,6 +174,7 @@ class LogAnalyzer:
                     'format': format_receive
                 })
                 # 添加统计信息表
+                #print('works here')
                 stats_data = {
                 '统计项': ['发送序列总数', '接收序列总数', '总序列数'],
                 '数量': [
@@ -167,7 +182,8 @@ class LogAnalyzer:
                     len(self.receive_sequences),
                     len(self.send_sequences) + len(self.receive_sequences)
                     ]
-            }
+                }
+                #print(stats_data)
             df_stats = pd.DataFrame(stats_data)
             df_stats.to_excel(writer, sheet_name='统计信息', index=False)
             
@@ -181,7 +197,8 @@ class LogAnalyzer:
         # 添加生成Excel报告
         self.generate_excel_report()
 def main():
-    analyzer = LogAnalyzer('F:/01_ProjectsFiles/01_Programs/LogFilse/2024-09-24.log')
+    #analyzer = LogAnalyzer('F:/01_ProjectsFiles/01_Programs/LogFilse/2024-09-24.log')
+    analyzer = LogAnalyzer(rootpath + 'Logcom.log')
     analyzer.analyze_log()
     analyzer.print_statistics()
 if __name__ == "__main__":
