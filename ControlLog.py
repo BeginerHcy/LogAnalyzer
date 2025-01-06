@@ -5,7 +5,7 @@ import pandas as pd
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 
-rootpath = 'F:/01_ProjectsFiles/01_Programs/LogFilse/'  
+rootpath = 'D:/00_PROJECT/04_Python/LogAnalyzer/'  
 
 motion_dict = {
     '528': 'ADIT_UCS',
@@ -33,7 +33,9 @@ motion_dict = {
     '1025': 'PAR_UPDATE',
     '1026': 'CST_UPDATE',
     '1027': 'ADD_MONITOR',
-    '1028': 'DEL_MONITOR'
+    '1028': 'DEL_MONITOR',
+    '523': 'JOG_JT',
+    '527': 'JOG_STOP'
 }
 
 def parse_log_line(line: str) -> Dict[str, Any]:
@@ -51,7 +53,6 @@ def parse_log_line(line: str) -> Dict[str, Any]:
             'action_code': action_code.strip(),
             'action_stat': action_stat.strip()
         }
-        
         return None
         
     except Exception as e:
@@ -187,7 +188,7 @@ def create_excel_report(actions: List[Dict[str, Any]], output_file: str):
 def main():
     try:
         # 读取日志文件
-        with open(rootpath + 'Logctrl.txt', 'r') as file:
+        with open(rootpath + 'ctrl.txt', 'r') as file:
             log_content = file.read()
         
         print("开始解析日志...")

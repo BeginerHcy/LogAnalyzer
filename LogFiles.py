@@ -4,7 +4,7 @@ from collections import defaultdict
 import pandas as pd
 import os
 
-rootpath = 'F:/01_ProjectsFiles/01_Programs/LogFilse/'
+rootpath = 'D:/00_PROJECT/04_Python/LogAnalyzer/' 
 class LogAnalyzer:
     def __init__(self, log_file_path):
         self.log_file_path = log_file_path
@@ -99,21 +99,21 @@ class LogAnalyzer:
                     sub_action = bytes_data[2] if len(bytes_data) > 2 else None
                     if sub_action == 0x04:  # 取片子动作
                         if len(bytes_data) >= 6:
-                            station = bytes_data[4]
-                            layer = bytes_data[5]
-                            arm = bytes_data[6]
+                            station = bytes_data[3]
+                            layer = bytes_data[4]
+                            arm = bytes_data[5]
                             return f"取片 站点{station} 层数{layer} 手臂{arm}"
                     elif sub_action == 0x05:  # 放片子动作
                         if len(bytes_data) >= 6:
-                            station = bytes_data[4]
-                            layer = bytes_data[5]
-                            arm = bytes_data[6]
+                            station = bytes_data[3]
+                            layer = bytes_data[4]
+                            arm = bytes_data[5]
                             return f"放片 站点{station} 层数{layer} 手臂{arm}"
                     elif sub_action == 0x0c:  # 准备子动作
                         if len(bytes_data) >= 6:
-                            station = bytes_data[4]
-                            layer = bytes_data[5]
-                            arm = bytes_data[6]
+                            station = bytes_data[3]
+                            layer = bytes_data[4]
+                            arm = bytes_data[5]
                             return f"准备 站点{station} 层数{layer} 手臂{arm} "
                     return f"执行Macro动作{sub_action}"
             # 3. 完成
@@ -277,7 +277,7 @@ class LogAnalyzer:
         self.generate_excel_report()
 def main():
     #analyzer = LogAnalyzer('F:/01_ProjectsFiles/01_Programs/LogFilse/2024-09-24.log')
-    analyzer = LogAnalyzer(rootpath + 'Logcom.log')
+    analyzer = LogAnalyzer(rootpath + 'logs.log')
     analyzer.analyze_log()
     analyzer.print_statistics()
 if __name__ == "__main__":
